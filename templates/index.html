@@ -101,6 +101,39 @@
       color: rgba(255,255,255,0.4);
       font-family: monospace;
     }
+
+    #fps-control {
+      width: 100%;
+      max-width: 640px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    #fps-control span {
+      font-size: 0.8rem;
+      color: #666;
+      min-width: 60px;
+    }
+
+    .fps-btn {
+      padding: 5px 12px;
+      border-radius: 14px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #666;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .fps-btn.active {
+      border-color: #6bffb8;
+      color: #6bffb8;
+      background: rgba(107,255,184,0.08);
+    }
   </style>
 </head>
 <body>
@@ -118,6 +151,15 @@
 
 <div id="statusBar">Kamera wird gestartet…</div>
 
+<div id="fps-control">
+  <span>FPS:</span>
+  <button class="fps-btn" data-fps="5">5</button>
+  <button class="fps-btn active" data-fps="10">10</button>
+  <button class="fps-btn" data-fps="15">15</button>
+  <button class="fps-btn" data-fps="20">20</button>
+  <button class="fps-btn" data-fps="30">30</button>
+</div>
+
 <div id="results">
   <span class="badge" data-form="Kreis"    style="--color:#6bffb8">● Kreis</span>
   <span class="badge" data-form="Dreieck"  style="--color:#ff6b6b">▲ Dreieck</span>
@@ -134,8 +176,23 @@
   const statusEl = document.getElementById('statusBar');
   const fpsEl    = document.getElementById('fps');
 
-  let senden = false;
+  let senden     = false;
   let letzteZeit = performance.now();
+  let zielFps    = 10;
+  let intervalId = null;
+
+  // ── FPS-Buttons ───────────────────────────────────────────────────────────
+  document.querySelectorAll('.fps-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fps-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      zielFps = parseInt(btn.dataset.fps);
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = setInterval(frameSchicken, Math.round(1000 / zielFps));
+      }
+    });
+  });
 
   // ── Kamera starten ────────────────────────────────────────────────────────
   async function kameraStarten() {
@@ -148,7 +205,7 @@
         canvas.width  = video.videoWidth;
         canvas.height = video.videoHeight;
         setStatus('Aktiv — Form vor die Kamera halten', 'ok');
-        setInterval(frameSchicken, 300);  // alle 300ms ein Frame schicken
+        intervalId = setInterval(frameSchicken, Math.round(1000 / zielFps));
       };
     } catch (err) {
       setStatus('Kamera-Fehler: ' + err.message, 'error');

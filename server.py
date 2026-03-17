@@ -1,5 +1,5 @@
 """
-server.py — Flask Web-Server
+server.py — Flask Web-Server (Render.com kompatibel)
 
 Stellt die Web-App bereit und empfängt Kamera-Frames vom Handy.
 Für jeden Frame:
@@ -7,17 +7,13 @@ Für jeden Frame:
   2. Features extrahieren (features.py)
   3. Decision Tree klassifiziert die Form
   4. Ergebnis als JSON zurück ans Handy
-
-Ausführen: python server.py
-Dann auf dem Handy öffnen: https://<deine-IP>:5000
-(Sicherheitswarnung im Browser mit "Erweitert → Weiter" bestätigen)
 """
 
+import os
 import cv2
 import numpy as np
 import base64
 import joblib
-import socket
 
 from flask import Flask, request, jsonify, render_template
 from features import extract_features
@@ -107,27 +103,8 @@ def predict():
     return jsonify({'formen': erkannte_formen})
 
 
-def eigene_ip():
-    """Gibt die lokale IP-Adresse zurück."""
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return 'localhost'
-
-
 if __name__ == '__main__':
-    ip = eigene_ip()
-    print(f"\n{'=' * 50}")
-    print(f"  Server läuft!")
-    print(f"  Laptop:  https://localhost:5000")
-    print(f"  Handy:   https://{ip}:5000")
-    print(f"  (Sicherheitswarnung mit 'Erweitert → Weiter' bestätigen)")
-    print(f"{'=' * 50}\n")
-
-    # ssl_context='adhoc' erstellt ein temporäres Zertifikat →
-    # nötig damit das Handy die Kamera im Browser nutzen darf
-    app.run(host='0.0.0.0', port=5000, debug=False, ssl_context='adhoc')
+    # PORT wird von Render.com als Umgebungsvariable gesetzt
+    port = int(os.environ.get('PORT', 5000))
+    print(f"\nServer läuft auf Port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)

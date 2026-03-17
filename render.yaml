@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: shape-detector-ml
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python train.py
+    startCommand: gunicorn server:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
