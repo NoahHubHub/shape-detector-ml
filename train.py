@@ -11,11 +11,14 @@ Ablauf:
 Ausführen: python train.py
 """
 
+import matplotlib
+matplotlib.use('Agg')  # Headless-Backend für Server ohne Display (z.B. Render)
+import matplotlib.pyplot as plt
+
 import cv2
 import numpy as np
 import os
 import joblib
-import matplotlib.pyplot as plt
 
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.model_selection import train_test_split
