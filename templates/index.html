@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Form Erkenner — ML</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f0f0f;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      width: 100%;
+      padding: 14px 16px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      text-align: center;
+    }
+
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+
+    header .subtitle {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 3px;
+    }
+
+    #container {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      margin-top: 14px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #videoEl {
+      width: 100%;
+      display: block;
+    }
+
+    #overlayCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #statusBar {
+      width: 100%;
+      max-width: 640px;
+      padding: 10px 16px;
+      font-size: 0.82rem;
+      color: #777;
+      text-align: center;
+    }
+    #statusBar.ok    { color: #6bffb8; }
+    #statusBar.error { color: #ff6b6b; }
+
+    #results {
+      width: 100%;
+      max-width: 640px;
+      padding: 8px 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .badge {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .badge.active {
+      border-color: var(--color);
+      color: var(--color);
+      background: rgba(0,0,0,0.3);
+    }
+
+    #fps {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.4);
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Form Erkenner</h1>
+  <div class="subtitle">Decision Tree ML · Python Backend</div>
+</header>
+
+<div id="container">
+  <video id="videoEl" autoplay playsinline muted></video>
+  <canvas id="overlayCanvas"></canvas>
+  <div id="fps"></div>
+</div>
+
+<div id="statusBar">Kamera wird gestartet…</div>
+
+<div id="results">
+  <span class="badge" data-form="Kreis"    style="--color:#6bffb8">● Kreis</span>
+  <span class="badge" data-form="Dreieck"  style="--color:#ff6b6b">▲ Dreieck</span>
+  <span class="badge" data-form="Quadrat"  style="--color:#ffd93d">■ Quadrat</span>
+  <span class="badge" data-form="Rechteck" style="--color:#ffa500">▬ Rechteck</span>
+  <span class="badge" data-form="Fünfeck"  style="--color:#a29bfe">⬠ Fünfeck</span>
+  <span class="badge" data-form="Sechseck" style="--color:#74b9ff">⬡ Sechseck</span>
+</div>
+
+<script>
+  const video    = document.getElementById('videoEl');
+  const canvas   = document.getElementById('overlayCanvas');
+  const ctx      = canvas.getContext('2d');
+  const statusEl = document.getElementById('statusBar');
+  const fpsEl    = document.getElementById('fps');
+
+  let senden = false;
+  let letzteZeit = performance.now();
+
+  // ── Kamera starten ────────────────────────────────────────────────────────
+  async function kameraStarten() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
+      });
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        setStatus('Aktiv — Form vor die Kamera halten', 'ok');
+        setInterval(frameSchicken, 300);  // alle 300ms ein Frame schicken
+      };
+    } catch (err) {
+      setStatus('Kamera-Fehler: ' + err.message, 'error');
+    }
+  }
+
+  // ── Frame an Flask schicken ───────────────────────────────────────────────
+  const hilfsCanvas = document.createElement('canvas');
+  const hilfsCtx    = hilfsCanvas.getContext('2d');
+
+  async function frameSchicken() {
+    if (senden || video.readyState < 2) return;
+    senden = true;
+
+    // Bild auf 640px verkleinern → weniger Daten, schneller
+    const maxBreite = 640;
+    const scale     = Math.min(1, maxBreite / video.videoWidth);
+    hilfsCanvas.width  = video.videoWidth  * scale;
+    hilfsCanvas.height = video.videoHeight * scale;
+    hilfsCtx.drawImage(video, 0, 0, hilfsCanvas.width, hilfsCanvas.height);
+    const base64 = hilfsCanvas.toDataURL('image/jpeg', 0.8);
+
+    try {
+      const res  = await fetch('/predict', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ image: base64 })
+      });
+      const data = await res.json();
+      zeichnen(data.formen || [], scale);
+    } catch (e) {
+      setStatus('Verbindungsfehler zum Server', 'error');
+    }
+
+    // FPS berechnen
+    const jetzt = performance.now();
+    fpsEl.textContent = Math.round(1000 / (jetzt - letzteZeit)) + ' fps';
+    letzteZeit = jetzt;
+
+    senden = false;
+  }
+
+  // ── Erkannte Formen zeichnen ──────────────────────────────────────────────
+  function zeichnen(formen, scale) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Alle Badges zurücksetzen
+    document.querySelectorAll('.badge').forEach(b => b.classList.remove('active'));
+
+    formen.forEach(f => {
+      const { x, y, w, h } = f.bbox;
+
+      // Skalierung rückgängig machen (Bild war verkleinert)
+      const sx = canvas.width  / (hilfsCanvas.width  || canvas.width);
+      const sy = canvas.height / (hilfsCanvas.height || canvas.height);
+
+      const rx = x * sx, ry = y * sy, rw = w * sx, rh = h * sy;
+
+      // Rahmen zeichnen
+      ctx.strokeStyle = f.farbe;
+      ctx.lineWidth   = 3;
+      ctx.strokeRect(rx, ry, rw, rh);
+
+      // Label-Hintergrund
+      const label    = `${f.name} ${f.konfidenz}%`;
+      const fontSize = Math.max(14, Math.min(22, rw / 6));
+      ctx.font       = `bold ${fontSize}px -apple-system, sans-serif`;
+      const tw       = ctx.measureText(label).width;
+      const tx       = rx + rw / 2 - tw / 2;
+      const ty       = ry > 30 ? ry - 8 : ry + rh + fontSize + 4;
+
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(tx - 5, ty - fontSize, tw + 10, fontSize + 6);
+
+      ctx.fillStyle = f.farbe;
+      ctx.fillText(label, tx, ty);
+
+      // Badge aktivieren
+      const badge = document.querySelector(`[data-form="${f.name}"]`);
+      if (badge) badge.classList.add('active');
+    });
+  }
+
+  function setStatus(msg, type = '') {
+    statusEl.textContent  = msg;
+    statusEl.className    = type;
+  }
+
+  kameraStarten();
+</script>
+</body>
+</html>
