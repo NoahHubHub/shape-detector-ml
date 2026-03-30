@@ -20,13 +20,16 @@ from features import extract_features
 
 app = Flask(__name__)
 
-# Modell laden (muss vorher train.py ausgeführt worden sein)
+# Modell laden — bei fehlendem Modell automatisch trainieren
 try:
     modell = joblib.load('model/model.pkl')
     print("✓ Modell geladen: model/model.pkl")
 except FileNotFoundError:
-    print("✗ Kein Modell gefunden! Bitte zuerst: python train.py")
-    exit(1)
+    import subprocess, sys
+    print("⚙ Kein Modell gefunden — starte Training (dauert ~60s)...")
+    subprocess.run([sys.executable, 'train.py'], check=True)
+    modell = joblib.load('model/model.pkl')
+    print("✓ Modell trainiert und geladen")
 
 # Farben pro Form (BGR für OpenCV, wird als Hex ans Frontend gesendet)
 FORM_FARBEN = {
