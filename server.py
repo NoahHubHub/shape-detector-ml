@@ -107,4 +107,6 @@ if __name__ == '__main__':
     # PORT wird von Render.com als Umgebungsvariable gesetzt
     port = int(os.environ.get('PORT', 5000))
     print(f"\nServer läuft auf Port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    print(f"  Lokal:  https://localhost:{port}")
+    print(f"  Handy:  https://<deine-IP>:{port}  (gleiches WLAN)")
+    app.run(host='0.0.0.0', port=port, debug=False, ssl_context='adhoc')

@@ -68,9 +68,12 @@ def bild_erzeugen(form, groesse=IMG_SIZE):
     elif form == 'Rechteck':
         w = int(r_var * np.random.uniform(1.5, 2.2))
         h = int(r_var * np.random.uniform(0.45, 0.70))
+        # Clamp offsets so the rectangle stays within image bounds
+        ox = int(np.clip(offset_x, -(cx - w - 2), (groesse - cx - w - 2)))
+        oy = int(np.clip(offset_y, -(cy - h - 2), (groesse - cy - h - 2)))
         cv2.rectangle(img,
-                      (cx + offset_x - w, cy + offset_y - h),
-                      (cx + offset_x + w, cy + offset_y + h), 0, -1)
+                      (cx + ox - w, cy + oy - h),
+                      (cx + ox + w, cy + oy + h), 0, -1)
 
     elif form == 'Fünfeck':
         pts = []
